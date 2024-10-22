@@ -1,8 +1,10 @@
-import { BitcoinProvider } from "@/BitcoinProvider";
 import fetch from "cross-fetch";
+import { BitcoinProvider } from "@/BitcoinProvider";
+import { BlockHeader, RawTransaction } from "@/BitcoinTypes";
 
 interface RpcConfig {
   url: string;
+  port?: number;
   username?: string;
   password?: string;
 }
@@ -11,10 +13,13 @@ export class BitcoinRpcProvider implements BitcoinProvider {
   private rpcConfig: RpcConfig;
 
   constructor(rpcConfig: RpcConfig) {
-    this.rpcConfig = rpcConfig;
+    this.rpcConfig = {
+      ...rpcConfig,
+      port: rpcConfig.port || 8332, // Default Bitcoin RPC port
+    };
   }
 
-  private async callRpc(method: string, params: any[] = []): Promise<any> {
+  private async callRpc(method: string, params: any[] = []): Promise<Response> {
     const body = JSON.stringify({
       jsonrpc: "1.0",
       id: new Date().getTime(),
@@ -33,12 +38,16 @@ export class BitcoinRpcProvider implements BitcoinProvider {
       headers["Authorization"] = `Basic ${auth}`;
     }
 
-    const response = await fetch(this.rpcConfig.url, {
+    const url = `${this.rpcConfig.url}:${this.rpcConfig.port}`;
+    return fetch(url, {
       method: "POST",
       headers: headers,
       body: body,
     });
+  }
 
+  private async callRpcJson(method: string, params: any[] = []): Promise<any> {
+    const response = await this.callRpc(method, params);
     const data = await response.json();
     if (data.error) {
       throw new Error(data.error.message);
@@ -46,12 +55,12 @@ export class BitcoinRpcProvider implements BitcoinProvider {
     return data.result;
   }
 
-  async getBlockHeader(blockHash: string): Promise<string> {
-    return this.callRpc("getblockheader", [blockHash, false]);
+  async getBlockHeader(blockHash: string): Promise<BlockHeader> {
+    return this.callRpcJson("getblockheader", [blockHash, true]);
   }
 
   async getBlockHash(blockHeight: number): Promise<string> {
-    return this.callRpc("getblockhash", [blockHeight]);
+    return this.callRpcJson("getblockhash", [blockHeight]);
   }
 
   async getTxOutProof(txids: string[], blockHash?: string): Promise<string> {
@@ -59,13 +68,10 @@ export class BitcoinRpcProvider implements BitcoinProvider {
     if (blockHash) {
       params.push([blockHash]);
     }
-    return this.callRpc("gettxoutproof", params);
+    return this.callRpcJson("gettxoutproof", params);
   }
 
-  async getRawTransaction(
-    txid: string,
-    verbose: boolean = false
-  ): Promise<any> {
-    return this.callRpc("getrawtransaction", [txid, verbose]);
+  async getRawTransaction(txid: string): Promise<RawTransaction> {
+    return this.callRpcJson("getrawtransaction", [txid, true]);
   }
 }
