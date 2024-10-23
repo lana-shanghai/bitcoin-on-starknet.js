@@ -1,6 +1,6 @@
 import fetch from "cross-fetch";
 import { BitcoinProvider } from "@/BitcoinProvider";
-import { BlockHeader, RawTransaction } from "@/BitcoinTypes";
+import { BlockHeader, RawTransaction, Block } from "@/BitcoinTypes";
 
 interface RpcConfig {
   url: string;
@@ -59,14 +59,18 @@ export class BitcoinRpcProvider implements BitcoinProvider {
     return this.callRpcJson("getblockheader", [blockHash, true]);
   }
 
+  async getBlock(blockHash: string, verbosity: number = 1): Promise<Block> {
+    return this.callRpcJson("getblock", [blockHash, verbosity]);
+  }
+
   async getBlockHash(blockHeight: number): Promise<string> {
     return this.callRpcJson("getblockhash", [blockHeight]);
   }
 
   async getTxOutProof(txids: string[], blockHash?: string): Promise<string> {
-    const params = [txids];
+    const params: [string[], string?] = [txids];
     if (blockHash) {
-      params.push([blockHash]);
+      params.push(blockHash);
     }
     return this.callRpcJson("gettxoutproof", params);
   }

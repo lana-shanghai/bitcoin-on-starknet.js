@@ -148,4 +148,63 @@ describe("BitcoinRpcProvider", () => {
       "1MejoVXRvsmwyDpTpkw3VJ82NsjjT8SyEw"
     );
   });
+
+  it("should get block", async () => {
+    const mockBlockHash =
+      "00000000000000d0dfd4c9d588d325dce4f32c1b31b7c0064cba7025a9b9adcc";
+    const mockBlockData = {
+      hash: "00000000000000d0dfd4c9d588d325dce4f32c1b31b7c0064cba7025a9b9adcc",
+      confirmations: 639148,
+      height: 227836,
+      version: 2,
+      versionHex: "00000002",
+      merkleroot:
+        "38a2518423d8ea76e716d1dc86d742b9e7f3febda7bf9a3e18bcd6c8ad55ff45",
+      time: 1364140204,
+      mediantime: 1364138296,
+      nonce: 30275792,
+      bits: "1a02816e",
+      difficulty: 6695826.282596251,
+      chainwork:
+        "000000000000000000000000000000000000000000000030f64e660f4b573ba8",
+      nTx: 100,
+      previousblockhash:
+        "00000000000001aa077d7aa84c532a4d69bdbff519609d1da0835261b7a74eb6",
+      nextblockhash:
+        "000000000000002579bc6db5a836a81d3a217b549721a0ef1facdf8f069ce0cb",
+      strippedsize: 39628,
+      size: 39628,
+      weight: 158512,
+      tx: [
+        "0f3601a5da2f516fa9d3f80c9bf6e530f1afb0c90da73e8f8ad0630c5483afe5",
+        // ... other transaction IDs ...
+        "13aa4bb9a1664275a481766b7fb9ea07c7e60b1a8adb5bdff08db8eccc614e53",
+      ],
+    };
+
+    (fetch as jest.MockedFunction<typeof fetch>).mockResolvedValueOnce({
+      json: jest.fn().mockResolvedValue({ result: mockBlockData }),
+    } as any);
+
+    const result = await provider.getBlock(mockBlockHash);
+    expect(result).toEqual(mockBlockData);
+    expect(result.hash).toBe(mockBlockHash);
+    expect(result.height).toBe(227836);
+    expect(result.version).toBe(2);
+    expect(result.merkleroot).toBe(
+      "38a2518423d8ea76e716d1dc86d742b9e7f3febda7bf9a3e18bcd6c8ad55ff45"
+    );
+    expect(result.time).toBe(1364140204);
+    expect(result.nonce).toBe(30275792);
+    expect(result.bits).toBe("1a02816e");
+    expect(result.difficulty).toBe(6695826.282596251);
+    expect(result.nTx).toBe(100);
+    expect(result.tx).toHaveLength(2);
+    expect(result.tx[0]).toBe(
+      "0f3601a5da2f516fa9d3f80c9bf6e530f1afb0c90da73e8f8ad0630c5483afe5"
+    );
+    expect(result.tx[1]).toBe(
+      "13aa4bb9a1664275a481766b7fb9ea07c7e60b1a8adb5bdff08db8eccc614e53"
+    );
+  });
 });

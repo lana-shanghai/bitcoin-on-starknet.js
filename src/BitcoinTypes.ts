@@ -16,6 +16,13 @@ export interface BlockHeader {
   nextblockhash?: string;
 }
 
+export interface Block extends BlockHeader {
+  strippedsize: number;
+  size: number;
+  weight: number;
+  tx: string[];
+}
+
 export interface RawTransaction {
   txid: string;
   hash: string;
@@ -50,4 +57,10 @@ export interface RawTransaction {
   confirmations: number;
   time: number;
   blocktime: number;
+}
+
+export interface BlockHeightProof {
+  blockHeader: BlockHeader;
+  rawCoinbaseTx: string;
+  merkleProof: string[];
 }
