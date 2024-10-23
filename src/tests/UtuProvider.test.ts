@@ -1,0 +1,44 @@
+import { config } from "dotenv";
+import { UtuProvider } from "@/UtuProvider";
+import { BitcoinRpcProvider } from "@/BitcoinRpcProvider";
+
+config();
+
+describe("UtuProvider", () => {
+  let utuProvider: UtuProvider;
+  let bitcoinProvider: BitcoinRpcProvider;
+
+  beforeAll(() => {
+    bitcoinProvider = new BitcoinRpcProvider({
+      url: process.env.BITCOIN_RPC_URL || "",
+      username: process.env.BITCOIN_RPC_USERNAME || "",
+      password: process.env.BITCOIN_RPC_PASSWORD || "",
+    });
+    utuProvider = new UtuProvider(bitcoinProvider);
+  });
+
+  it("should get block height proof for block 800000", async () => {
+    const height = 800000;
+    const proof = await utuProvider.getBlockHeightProof(height);
+
+    expect(proof.blockHeader).toBeDefined();
+    expect(proof.rawCoinbaseTx).toBe(
+      "010000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff1a0300350c0120130909092009092009102cda1492140000000000ffffffff02c09911260000000017a914c3f8f898ae5cab4f4c1d597ecb0f3a81a9b146c3870000000000000000266a24aa21a9ed9fbe517a588ccaca585a868f3cf19cb6897e3c26f3351361fb28ac8509e69a7e0120000000000000000000000000000000000000000000000000000000000000000000000000"
+    );
+    expect(proof.merkleProof).toEqual([
+      "b75ca3106ed100521aa50e3ec267a06431c6319538898b25e1b757a5736f5fb4",
+      "d41f5de48325e79070ccd3a23005f7a3b405f3ce1faa4df09f6d71770497e9d5",
+      "e966899d07c2e59033c073820b2f37a11532c1d11184373c4e558d65dac475e0",
+      "9f43ef264af1c3a4678d2bf5e60cddbd87b97618b1c80bd2b8a7f9b7f3baca68",
+      "4befb427613b7021015030bf67472af6c76f680fadc90bc4c267a9e5804d8948",
+      "bf61e05d4675710220c0b8dd669dcac9a1cbc3edb7ac64fc50410da9228333d5",
+      "c88892d93e8110f2ec82c41ac30e6a3c8dfe8cf062fefb4b5c09ee754d7ce42c",
+      "d4e7722bda133364a17b82990b16c3eb62f4a47d6aaae1c16bb0553806fcd3df",
+      "2cbc00355a2debbb8b90dd60ab0dd520699b40e4e4ad90d546864a6e4c5087f8",
+      "f2a33c753e9894eea7728206d927e830e946c4e13706275df14362398538e3db",
+      "8cc2c566df38c865e0aa6ddfd46d3440e99442a6d04d567323cbe53ffa470234",
+      "885cd4d205c35e05f8f738328166b9c65304583704162bcac8944b20690f696f",
+      "f6d90508da8aa581f7203f4899498c775ed4878544adcdef5e7b53a4ab691dd7",
+    ]);
+  });
+});

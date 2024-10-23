@@ -58,9 +58,3 @@ export interface RawTransaction {
   time: number;
   blocktime: number;
 }
-
-export interface BlockHeightProof {
-  blockHeader: BlockHeader;
-  rawCoinbaseTx: string;
-  merkleProof: string[];
-}

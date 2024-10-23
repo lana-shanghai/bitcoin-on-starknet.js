@@ -20,4 +20,8 @@ jobs:
         run: bun run build
 
       - name: Run tests
+        env:
+          BITCOIN_RPC_URL: ${{ secrets.BITCOIN_RPC_URL }}
+          BITCOIN_RPC_USERNAME: ${{ secrets.BITCOIN_RPC_USERNAME }}
+          BITCOIN_RPC_PASSWORD: ${{ secrets.BITCOIN_RPC_PASSWORD }}
         run: bun run test
