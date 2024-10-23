@@ -41,4 +41,37 @@ describe("UtuProvider", () => {
       "f6d90508da8aa581f7203f4899498c775ed4878544adcdef5e7b53a4ab691dd7",
     ]);
   });
+
+  it("should get register blocks tx for a given block hash", async () => {
+    const blockHash =
+      "00000000d1145790a8694403d4063f323d499e655c83426834d4ce2f8dd4a2ee";
+    const registerBlocksTx = await utuProvider.getRegisterBlocksTx([blockHash]);
+
+    expect(registerBlocksTx).toBeDefined();
+    expect(registerBlocksTx.contractAddress).toBe("0x..."); // Replace with actual contract address
+    expect(registerBlocksTx.selector).toBe("0x..."); // Replace with actual selector
+    expect(registerBlocksTx.calldata).toEqual([
+      "0x1",
+      "0x01000000",
+      "0x55bd840a",
+      "0x78798ad0",
+      "0xda853f68",
+      "0x974f3d18",
+      "0x3e2bd1db",
+      "0x6a842c1f",
+      "0xeecf222a",
+      "0x00000000",
+      "0xff104ccb",
+      "0x05421ab9",
+      "0x3e63f8c3",
+      "0xce5c2c2e",
+      "0x9dbb37de",
+      "0x2764b3a3",
+      "0x175c8166",
+      "0x562cac7d",
+      "0x51b96a49",
+      "0x1d00ffff",
+      "0x283e9e70",
+    ]);
+  });
 });

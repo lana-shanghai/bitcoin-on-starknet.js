@@ -105,11 +105,19 @@ export class UtuProvider {
         .join("");
     };
 
+    // New helper function to serialize hash
+    const serializedHash = (hash: string): string[] => {
+      return hash
+        .match(/.{8}/g)!
+        .map((chunk) => "0x" + chunk.match(/.{2}/g)!.reverse().join(""))
+        .reverse();
+    };
+
     // Serialize each field
     const serialized = [
       "0x" + toLittleEndianHex(blockHeader.version),
-      "0x" + blockHeader.previousblockhash,
-      "0x" + blockHeader.merkleroot,
+      ...serializedHash(blockHeader.previousblockhash as string),
+      ...serializedHash(blockHeader.merkleroot),
       "0x" + toLittleEndianHex(blockHeader.time),
       "0x" + blockHeader.bits,
       "0x" + toLittleEndianHex(blockHeader.nonce),
