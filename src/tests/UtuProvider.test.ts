@@ -23,10 +23,9 @@ describe("UtuProvider", () => {
 
     expect(proof.blockHeader).toBeDefined();
     expect(proof.rawCoinbaseTx).toBe(
-      "010000000001010000000000000000000000000000000000000000000000000000000000000000ffffffff1a0300350c0120130909092009092009102cda1492140000000000ffffffff02c09911260000000017a914c3f8f898ae5cab4f4c1d597ecb0f3a81a9b146c3870000000000000000266a24aa21a9ed9fbe517a588ccaca585a868f3cf19cb6897e3c26f3351361fb28ac8509e69a7e0120000000000000000000000000000000000000000000000000000000000000000000000000"
+      "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff1a0300350c0120130909092009092009102cda1492140000000000ffffffff02c09911260000000017a914c3f8f898ae5cab4f4c1d597ecb0f3a81a9b146c3870000000000000000266a24aa21a9ed9fbe517a588ccaca585a868f3cf19cb6897e3c26f3351361fb28ac8509e69a7e00000000"
     );
     expect(proof.merkleProof).toEqual([
-      "b75ca3106ed100521aa50e3ec267a06431c6319538898b25e1b757a5736f5fb4",
       "d41f5de48325e79070ccd3a23005f7a3b405f3ce1faa4df09f6d71770497e9d5",
       "e966899d07c2e59033c073820b2f37a11532c1d11184373c4e558d65dac475e0",
       "9f43ef264af1c3a4678d2bf5e60cddbd87b97618b1c80bd2b8a7f9b7f3baca68",
@@ -42,14 +41,18 @@ describe("UtuProvider", () => {
     ]);
   });
 
-  it("should get register blocks tx for a given block hash", async () => {
+  it("should get register blocks tx for given block hashes", async () => {
     const blockHash =
       "00000000d1145790a8694403d4063f323d499e655c83426834d4ce2f8dd4a2ee";
     const registerBlocksTx = await utuProvider.getRegisterBlocksTx([blockHash]);
 
     expect(registerBlocksTx).toBeDefined();
-    expect(registerBlocksTx.contractAddress).toBe("0x..."); // Replace with actual contract address
-    expect(registerBlocksTx.selector).toBe("0x..."); // Replace with actual selector
+    expect(registerBlocksTx.contractAddress).toBe(
+      "0x034838129702a2f071cd8cf9277d2f2f2dac3284c2217d9e2e076624fb5afc2f"
+    ); // todo: eplace with actual contract address
+    expect(registerBlocksTx.selector).toBe(
+      "0x00afd92eeac2cdc892d6323dd051eaf871b8d21df8933ce111c596038eb3afd3"
+    );
     expect(registerBlocksTx.calldata).toEqual([
       "0x1",
       "0x01000000",
@@ -73,5 +76,15 @@ describe("UtuProvider", () => {
       "0x1d00ffff",
       "0x283e9e70",
     ]);
+  });
+
+  it("should get canonical chain update tx for a given block slice", async () => {
+    const updateCanonicalChainTx = await utuProvider.getCanonicalChainUpdateTx(
+      865_698,
+      865_699,
+      true
+    );
+
+    // console.log(updateCanonicalChainTx.calldata.join(", "));
   });
 });
