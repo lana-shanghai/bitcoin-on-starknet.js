@@ -133,7 +133,6 @@ export class UtuProvider {
 
     if (proof) {
       const proof = await this.getBlockHeightProof(beginHeight);
-
       const rawCoinbaseTx = serializedHash(proof.rawCoinbaseTx);
       // Option::Some
       calldata.push("0x1");
