@@ -1,7 +1,7 @@
 import { BitcoinProvider } from "./BitcoinProvider";
 import { BlockHeightProof, RegisterBlocksTx } from "@/UtuTypes";
 import { BlockHeader } from "./BitcoinTypes";
-import { byteArray } from "starknet";
+import { BigNumberish, byteArray, ByteArray } from "starknet";
 
 const CONTRACT_ADDRESS =
   "0x034838129702a2f071cd8cf9277d2f2f2dac3284c2217d9e2e076624fb5afc2f";
@@ -17,6 +17,51 @@ const serializedHash = (hash: string): string[] => {
     .match(/.{8}/g)!
     .map((chunk) => "0x" + chunk.match(/.{2}/g)!.reverse().join(""))
     .reverse();
+};
+
+// Add this helper function near the top with other helpers
+const formatFelt = (value: BigNumberish): string => {
+  if (typeof value === "string" && value.startsWith("0x")) {
+    return value;
+  }
+  return "0x" + (typeof value === "string" ? value : value.toString(16));
+};
+
+// Helper function to convert hex string to ByteArray
+const byteArrayFromHexString = (hex: string): ByteArray => {
+  // Remove '0x' prefix if present
+  hex = hex.replace("0x", "");
+
+  const WORD_SIZE = 31; // Maximum bytes per word
+  const data: BigNumberish[] = [];
+  let currentWord = "";
+
+  // Process pairs of hex chars (1 byte)
+  for (let i = 0; i < hex.length; i += 2) {
+    const byte = String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+    currentWord += byte;
+
+    // When we reach WORD_SIZE bytes, add to data array
+    if (currentWord.length === WORD_SIZE) {
+      data.push("0x" + Buffer.from(currentWord, "ascii").toString("hex"));
+      currentWord = "";
+    }
+  }
+
+  // Handle remaining bytes
+  if (currentWord.length > 0) {
+    return {
+      data,
+      pending_word: "0x" + Buffer.from(currentWord, "ascii").toString("hex"),
+      pending_word_len: currentWord.length,
+    };
+  }
+
+  return {
+    data,
+    pending_word: "0x00",
+    pending_word_len: 0,
+  };
 };
 
 export interface UtuProviderResult {
@@ -123,36 +168,42 @@ export class UtuProvider {
   ) {
     const contractAddress = CONTRACT_ADDRESS;
     const selector = "0x...";
+    const firstBlockHash = await this.bitcoinProvider.getBlockHash(beginHeight);
     const lastBlockHash = await this.bitcoinProvider.getBlockHash(endHeight);
+    const firstBlockHeader = await this.bitcoinProvider.getBlockHeader(
+      firstBlockHash
+    );
 
     let calldata = [
-      "0x" + beginHeight.toString(16),
-      "0x" + endHeight.toString(16),
+      formatFelt(beginHeight),
+      formatFelt(endHeight),
       ...serializedHash(lastBlockHash),
     ];
 
     if (proof) {
       const proof = await this.getBlockHeightProof(beginHeight);
-      const rawCoinbaseTx = serializedHash(proof.rawCoinbaseTx);
       // Option::Some
-      calldata.push("0x1");
-      // rawCoinbaseTx is like a hash but we need to specify its length
-      calldata.push("0x" + rawCoinbaseTx.length.toString(16), ...rawCoinbaseTx);
+      calldata.push("0x0");
+
+      // block header
+      calldata.push(...this.serializeBlockHeader(firstBlockHeader));
+
+      const byteArrayCoinbaseTx = byteArrayFromHexString(proof.rawCoinbaseTx);
+
+      calldata.push(
+        formatFelt(byteArrayCoinbaseTx.data.length),
+        ...byteArrayCoinbaseTx.data.map((word) => formatFelt(word)),
+        formatFelt(byteArrayCoinbaseTx.pending_word),
+        formatFelt(byteArrayCoinbaseTx.pending_word_len)
+      );
       // a merkleProof is basically an array of hashes (fixed size arrays)
       calldata.push(
-        "0x" + proof.merkleProof.length.toString(16),
-        ...proof.merkleProof
-          .map(byteArray.byteArrayFromString)
-          .flatMap((byteArr) => [
-            "0x" + byteArr.data.length.toString(16),
-            ...byteArr.data.map((word) => "0x" + word.toString(16)),
-            "0x" + byteArr.pending_word.toString(16),
-            "0x" + byteArr.pending_word_len.toString(16),
-          ])
+        formatFelt(proof.merkleProof.length),
+        ...proof.merkleProof.flatMap(serializedHash)
       );
     } else {
       // Option::None
-      calldata.push("0x0");
+      calldata.push("0x1");
     }
 
     return {
@@ -172,7 +223,7 @@ export class UtuProvider {
       selector:
         "0x00afd92eeac2cdc892d6323dd051eaf871b8d21df8933ce111c596038eb3afd3",
       calldata: [
-        "0x" + blocks.length.toString(16),
+        formatFelt(blocks.length),
         ...blockHeaders.flatMap((header) => this.serializeBlockHeader(header)),
       ],
     };
@@ -197,12 +248,12 @@ export class UtuProvider {
 
     // Serialize each field
     const serialized = [
-      "0x" + toLittleEndianHex(blockHeader.version),
+      formatFelt(toLittleEndianHex(blockHeader.version)),
       ...serializedHash(blockHeader.previousblockhash as string),
       ...serializedHash(blockHeader.merkleroot),
-      "0x" + toLittleEndianHex(blockHeader.time),
-      "0x" + blockHeader.bits,
-      "0x" + toLittleEndianHex(blockHeader.nonce),
+      formatFelt(toLittleEndianHex(blockHeader.time)),
+      formatFelt(blockHeader.bits),
+      formatFelt(toLittleEndianHex(blockHeader.nonce)),
     ];
 
     return serialized;
