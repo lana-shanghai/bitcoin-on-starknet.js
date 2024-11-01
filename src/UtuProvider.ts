@@ -4,7 +4,7 @@ import { BlockHeader } from "./BitcoinTypes";
 import { BigNumberish, byteArray, ByteArray } from "starknet";
 
 const CONTRACT_ADDRESS =
-  "0x034838129702a2f071cd8cf9277d2f2f2dac3284c2217d9e2e076624fb5afc2f";
+  "0x057E8e978742D4189D9c1e4171F92D7b2b533a747a4F1d1e7847D52e53464675";
 
 // Helper function to convert to little-endian hex
 const toLittleEndianHex = (num: number): string => {
@@ -25,6 +25,11 @@ const formatFelt = (value: BigNumberish): string => {
     return value;
   }
   return "0x" + (typeof value === "string" ? value : value.toString(16));
+};
+
+// Helper function to reverse bytes in a hex string
+const reverseBytes = (hex: string): string => {
+  return hex.match(/../g)!.reverse().join("");
 };
 
 // Helper function to convert hex string to ByteArray
@@ -161,13 +166,123 @@ export class UtuProvider {
     };
   }
 
+  async getTxInclusionProof(txid: string): Promise<[string, boolean][]> {
+    // Get the transaction's block hash and proof
+    const proof = await this.bitcoinProvider.getTxOutProof([txid]);
+
+    // Extract total transactions count (4 bytes after block header)
+    const txCount = parseInt(
+      proof.slice(160, 168).match(/../g)!.reverse().join(""),
+      16
+    );
+
+    // Read CompactSize for number of hashes
+    const [hashCount, startPosition] = this.readCompactSize(proof, 168);
+
+    // Extract hashes
+    const hashes: string[] = [];
+    let position = startPosition;
+    for (let i = 0; i < hashCount; i++) {
+      const hash = proof.slice(position, position + 64);
+      hashes.push(reverseBytes(hash));
+      position += 64;
+    }
+
+    // Read flag bits
+    const [flagBitsLength, flagPosition] = this.readCompactSize(
+      proof,
+      position
+    );
+    const flagBytes = proof.slice(
+      flagPosition,
+      flagPosition + flagBitsLength * 2
+    );
+
+    // Convert flag bytes to bits array
+    const flagBits: boolean[] = [];
+    for (let i = 0; i < flagBytes.length; i += 2) {
+      const byte = parseInt(flagBytes.slice(i, i + 2), 16);
+      for (let j = 0; j < 8; j++) {
+        flagBits.push((byte & (1 << j)) !== 0);
+      }
+    }
+
+    // Calculate merkle branch using tree traversal
+    const merkleBranch: [string, boolean][] = [];
+    let hashPos = 0;
+    let flagPos = 0;
+
+    const height = Math.ceil(Math.log2(txCount));
+
+    // Helper function to calculate tree width at a given height
+    function calcTreeWidth(height: number): number {
+      return (txCount + (1 << height) - 1) >> height;
+    }
+
+    function traverse(height: number, pos: number): [string, boolean] {
+      if (flagPos >= flagBits.length) {
+        throw new Error("Overflowed flag bits array");
+      }
+
+      const parent = flagBits[flagPos++];
+
+      if (height === 0 || !parent) {
+        // If at height 0 or nothing interesting below, use the stored hash
+        if (hashPos >= hashes.length) {
+          throw new Error("Overflowed hash array");
+        }
+        const hash = hashes[hashPos++];
+        return [hash, true];
+      }
+
+      // Otherwise, descend into the subtrees
+      const [left, is_left_leaf] = traverse(height - 1, pos * 2);
+      let [right, is_right_leaf] = [left, is_left_leaf]; // Default to left if no right child exists
+
+      // Only traverse right child if it exists within the tree width
+      if (pos * 2 + 1 < calcTreeWidth(height - 1)) {
+        [right, is_right_leaf] = traverse(height - 1, pos * 2 + 1);
+        if (right === left) {
+          throw new Error("Invalid merkle proof - duplicate hash");
+        }
+      }
+
+      if (is_left_leaf && left !== txid) {
+        merkleBranch.push([left, true]);
+      }
+      if (is_right_leaf && right !== txid) {
+        merkleBranch.push([right, false]);
+      }
+
+      function hashCouple(hex1: string, hex2: string): string {
+        const crypto = require("crypto");
+        const combined = Buffer.concat([
+          Buffer.from(reverseBytes(hex1), "hex"),
+          Buffer.from(reverseBytes(hex2), "hex"),
+        ]);
+        const firstHash = crypto.createHash("sha256").update(combined).digest();
+        return reverseBytes(
+          crypto.createHash("sha256").update(firstHash).digest("hex")
+        );
+      }
+
+      const combined = hashCouple(left, right);
+      return [combined, false];
+    }
+
+    const [_computedRoot, _] = traverse(height, 0);
+
+    return merkleBranch;
+  }
+
   async getCanonicalChainUpdateTx(
     beginHeight: number,
     endHeight: number,
     proof: boolean
   ) {
     const contractAddress = CONTRACT_ADDRESS;
-    const selector = "0x...";
+    const selector =
+      "0x02e486c87262b6abbb9f00f150fe22bd3fa5568adb9524d7c4f9f4e38ca17529";
     const firstBlockHash = await this.bitcoinProvider.getBlockHash(beginHeight);
     const lastBlockHash = await this.bitcoinProvider.getBlockHash(endHeight);
     const firstBlockHeader = await this.bitcoinProvider.getBlockHeader(
@@ -179,7 +294,6 @@ export class UtuProvider {
       formatFelt(endHeight),
       ...serializedHash(lastBlockHash),
     ];
-
     if (proof) {
       const proof = await this.getBlockHeightProof(beginHeight);
       // Option::Some
@@ -257,5 +371,50 @@ export class UtuProvider {
     ];
 
     return serialized;
+  }
+
+  private readCompactSize(
+    hex: string,
+    startPosition: number
+  ): [number, number] {
+    const firstByte = parseInt(hex.slice(startPosition, startPosition + 2), 16);
+    let value: number;
+    let newPosition = startPosition;
+
+    if (firstByte < 0xfd) {
+      value = firstByte;
+      newPosition += 2;
+    } else if (firstByte === 0xfd) {
+      value = parseInt(
+        hex
+          .slice(newPosition + 2, newPosition + 6)
+          .match(/../g)!
+          .reverse()
+          .join(""),
+        16
+      );
+      newPosition += 6;
+    } else if (firstByte === 0xfe) {
+      value = parseInt(
+        hex
+          .slice(newPosition + 2, newPosition + 10)
+          .match(/../g)!
+          .reverse()
+          .join(""),
+        16
+      );
+      newPosition += 10;
+    } else {
+      value = parseInt(
+        hex
+          .slice(newPosition + 2, newPosition + 18)
+          .match(/../g)!
+          .reverse()
+          .join(""),
+        16
+      );
+      newPosition += 18;
+    }
+    return [value, newPosition];
   }
 }

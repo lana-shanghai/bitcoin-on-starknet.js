@@ -3,30 +3,31 @@ import { BitcoinRpcProvider, UtuProvider } from "bitcoin-on-starknet";
 async function main() {
   // Initialize the Bitcoin RPC provider
   const bitcoinProvider = new BitcoinRpcProvider({
-    url: process.env.BITCOIN_RPC_URL || "http://localhost:8332",
+    url: process.env.BITCOIN_RPC_URL,
     username: process.env.BITCOIN_RPC_USERNAME,
     password: process.env.BITCOIN_RPC_PASSWORD,
   });
-
-  // Initialize the Utu provider with the Bitcoin provider
   const utuProvider = new UtuProvider(bitcoinProvider);
 
   try {
-    // Get proof for block height 800000
-    console.log("Getting proof for block 800000...");
-    const proof = await utuProvider.getBlockHeightProof(800000);
-    console.log("Block header:", proof.blockHeader);
-    console.log("Raw coinbase transaction:", proof.rawCoinbaseTx);
-    console.log("Merkle proof length:", proof.merkleProof.length);
+    // Data that we are going to use
+    const txId =
+      "fa89c32152bf324cd1d47d48187f977c7e0f380f6f78132c187ce27923f62fcc";
+    const rawTransaction = await bitcoinProvider.getRawTransaction(txId, true);
+    const blockHeader = await bitcoinProvider.getBlockHeader(
+      rawTransaction.blockhash
+    );
 
-    // Get register blocks transaction
-    const blockHash =
-      "00000000d1145790a8694403d4063f323d499e655c83426834d4ce2f8dd4a2ee";
-    console.log("\nGetting register blocks transaction...");
-    const registerTx = await utuProvider.getRegisterBlocksTx([blockHash]);
-    console.log("Contract address:", registerTx.contractAddress);
-    console.log("Selector:", registerTx.selector);
-    console.log("Calldata length:", registerTx.calldata.length);
+    // Generate actual transactions
+    const registerBlocksTx = await utuProvider.getRegisterBlocksTx([
+      rawTransaction.blockhash,
+    ]);
+    const canonicalChainUpdateTx = await utuProvider.getCanonicalChainUpdateTx(
+      blockHeader.height,
+      blockHeader.height,
+      true
+    );
+    const txInclusionProof = await utuProvider.getTxInclusionProof(txId);
   } catch (error) {
     console.error("Error:", error);
   }
