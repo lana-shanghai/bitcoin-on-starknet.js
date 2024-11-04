@@ -2,6 +2,7 @@ import { BitcoinProvider } from "./BitcoinProvider";
 import { BlockHeightProof, RegisterBlocksTx } from "@/UtuTypes";
 import { BlockHeader } from "./BitcoinTypes";
 import { BigNumberish, ByteArray } from "starknet";
+import { Contract, RpcProvider } from "starknet";
 
 const CONTRACT_ADDRESS =
   "0x064e21f88caa162294fdda7f73d67ad09b81419e97df3409a5eb13ba39b88c31";
@@ -67,6 +68,15 @@ const byteArrayFromHexString = (hex: string): ByteArray => {
     pending_word: "0x00",
     pending_word_len: 0,
   };
+};
+
+// Add this helper function with other utility functions at the top
+const isResultEmpty = (blockStatus: string[]): boolean => {
+  return blockStatus.every((value: string) =>
+    value.startsWith("0x")
+      ? parseInt(value.slice(2), 16) === 0
+      : parseInt(value, 16) === 0
+  );
 };
 
 export interface UtuProviderResult {
@@ -416,5 +426,107 @@ export class UtuProvider {
       newPosition += 18;
     }
     return [value, newPosition];
+  }
+
+  /**
+   * Gets the sync transactions needed to register Bitcoin blocks on Starknet.
+   * This is a simple version that only registers new blocks and does not handle
+   * chain reorganizations or attempt to override an incorrect canonical chain.
+   */
+  async getSyncTxs(
+    starknetProvider: RpcProvider,
+    blockHeight: number,
+    minCPOW: bigint
+  ) {
+    // Prepare the calls array
+    const calls = [];
+
+    // Convert bits field to target threshold and compute proof of work
+    function computePOWFromBits(bits: string): bigint {
+      // Convert bits to target threshold
+      // Format is: 0x1d00ffff where:
+      // First byte (1d) is the number of bytes
+      // Next byte (00) is unused
+      // Last bytes (ffff) are the significant digits
+      const exponent = parseInt(bits.slice(0, 2), 16);
+      const coefficient = parseInt(bits.slice(2), 16);
+
+      // Target = coefficient * 256^(exponent-3)
+      const target = BigInt(coefficient) * BigInt(256) ** BigInt(exponent - 3);
+
+      // Compute POW as (2^256-1)/target
+      const maxValue = (BigInt(1) << BigInt(256)) - BigInt(1);
+      return maxValue / target;
+    }
+
+    let cPOW = 0n;
+    const blocksToRegister = [];
+    let canonicalRewriteMin = undefined;
+    let canonicalRewriteMax = undefined;
+    let currentBlockHeight = blockHeight;
+
+    // even if we need 0 cpow, we still need at least this block
+    while (cPOW < minCPOW || cPOW === 0n) {
+      // Get block information
+      const blockHash = await this.bitcoinProvider.getBlockHash(
+        currentBlockHeight
+      );
+      const blockHeader = await this.bitcoinProvider.getBlockHeader(blockHash);
+      cPOW += computePOWFromBits(blockHeader.bits);
+
+      // Check if block is written
+      const blockStatus = await starknetProvider.callContract({
+        contractAddress: CONTRACT_ADDRESS,
+        entrypoint: "get_status",
+        calldata: serializedHash(blockHash),
+      });
+      if (isResultEmpty(blockStatus)) {
+        blocksToRegister.push(blockHash);
+        if (canonicalRewriteMin === undefined) {
+          canonicalRewriteMin = currentBlockHeight;
+        }
+        canonicalRewriteMax = currentBlockHeight;
+      } else {
+        // if the block is written, we then need to check the status on the canonical chain
+        const canonicalChainBlock = await starknetProvider.callContract({
+          contractAddress: CONTRACT_ADDRESS,
+          entrypoint: "get_block",
+          calldata: ["0x" + currentBlockHeight.toString(16)],
+        });
+        // if it is not written, then we want to update it
+        if (isResultEmpty(canonicalChainBlock)) {
+          if (canonicalRewriteMin === undefined) {
+            canonicalRewriteMin = currentBlockHeight;
+          }
+          canonicalRewriteMax = currentBlockHeight;
+        }
+      }
+
+      currentBlockHeight += 1;
+    }
+
+    // 1. Register the block itself
+    const registerBlocks = await this.getRegisterBlocksTx(blocksToRegister);
+    calls.push(registerBlocks);
+
+    // 2. Update the canonical chain to include this block
+    if (canonicalRewriteMin !== undefined) {
+      // we require a height proof if there is not already the prev block on the canonical chain
+      const previousChainBlock = await starknetProvider.callContract({
+        contractAddress: CONTRACT_ADDRESS,
+        entrypoint: "get_block",
+        calldata: ["0x" + (blockHeight - 1).toString(16)],
+      });
+
+      const chainUpdate = await this.getCanonicalChainUpdateTx(
+        canonicalRewriteMin,
+        // it is defined if min is defined
+        canonicalRewriteMax as number,
+        isResultEmpty(previousChainBlock)
+      );
+      calls.push(chainUpdate);
+    }
+
+    return calls;
   }
 }

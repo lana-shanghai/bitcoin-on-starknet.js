@@ -30,8 +30,8 @@
     "ts-jest": "^29.2.5"
   },
   "devDependencies": {
-    "@rollup/plugin-alias": "^4.0.2",
-    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-alias": "^5.1.0",
+    "@rollup/plugin-commonjs": "^25.0.0",
     "@rollup/plugin-node-resolve": "^15.3.0",
     "rollup": "^4.24.0",
     "rollup-plugin-typescript2": "^0.36.0",

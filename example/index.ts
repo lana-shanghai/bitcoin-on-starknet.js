@@ -25,19 +25,17 @@ async function main() {
     const txId =
       "fa89c32152bf324cd1d47d48187f977c7e0f380f6f78132c187ce27923f62fcc";
     const rawTransaction = await bitcoinProvider.getRawTransaction(txId, true);
-    const blockHeader = await bitcoinProvider.getBlockHeader(
+    const header = await bitcoinProvider.getBlockHeader(
       rawTransaction.blockhash
     );
 
     // Generate actual transactions
-    const registerBlocksTx = await utuProvider.getRegisterBlocksTx([
-      rawTransaction.blockhash,
-    ]);
-    const canonicalChainUpdateTx = await utuProvider.getCanonicalChainUpdateTx(
-      blockHeader.height,
-      blockHeader.height,
-      true
+    const syncTransactions = await utuProvider.getSyncTxs(
+      starknetProvider,
+      header.height,
+      0n
     );
+
     const txInclusionProof = await utuProvider.getTxInclusionProof(txId);
   } catch (error) {
     console.error("Error:", error);
