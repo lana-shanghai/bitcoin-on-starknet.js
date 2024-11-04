@@ -1,7 +1,7 @@
 import { BitcoinProvider } from "./BitcoinProvider";
 import { BlockHeightProof, RegisterBlocksTx } from "@/UtuTypes";
 import { BlockHeader } from "./BitcoinTypes";
-import { BigNumberish, byteArray, ByteArray } from "starknet";
+import { BigNumberish, ByteArray } from "starknet";
 
 const CONTRACT_ADDRESS =
   "0x064e21f88caa162294fdda7f73d67ad09b81419e97df3409a5eb13ba39b88c31";

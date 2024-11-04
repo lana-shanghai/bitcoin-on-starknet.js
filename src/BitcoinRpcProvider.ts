@@ -19,7 +19,10 @@ export class BitcoinRpcProvider implements BitcoinProvider {
     };
   }
 
-  private async callRpc(method: string, params: any[] = []): Promise<Response> {
+  protected async callRpc(
+    method: string,
+    params: any[] = []
+  ): Promise<Response> {
     const body = JSON.stringify({
       jsonrpc: "1.0",
       id: new Date().getTime(),
