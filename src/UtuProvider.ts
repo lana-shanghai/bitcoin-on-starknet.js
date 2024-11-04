@@ -4,7 +4,7 @@ import { BlockHeader } from "./BitcoinTypes";
 import { BigNumberish, byteArray, ByteArray } from "starknet";
 
 const CONTRACT_ADDRESS =
-  "0x057E8e978742D4189D9c1e4171F92D7b2b533a747a4F1d1e7847D52e53464675";
+  "0x064e21f88caa162294fdda7f73d67ad09b81419e97df3409a5eb13ba39b88c31";
 
 // Helper function to convert to little-endian hex
 const toLittleEndianHex = (num: number): string => {

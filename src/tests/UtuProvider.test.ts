@@ -48,8 +48,8 @@ describe("UtuProvider", () => {
 
     expect(registerBlocksTx).toBeDefined();
     expect(registerBlocksTx.contractAddress).toBe(
-      "0x034838129702a2f071cd8cf9277d2f2f2dac3284c2217d9e2e076624fb5afc2f"
-    ); // todo: eplace with actual contract address
+      "0x064e21f88caa162294fdda7f73d67ad09b81419e97df3409a5eb13ba39b88c31"
+    );
     expect(registerBlocksTx.selector).toBe(
       "0x00afd92eeac2cdc892d6323dd051eaf871b8d21df8933ce111c596038eb3afd3"
     );
