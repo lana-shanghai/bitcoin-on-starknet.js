@@ -109,43 +109,9 @@ async function main() {
         "0x025a9ad6882f2475e2ffb11f893dc90829a3672ad40d5428084330b36e55fbff",
       calldata,
     };
-    const calls = [...syncTransactions, proveDepositCall];
 
-    // Map function selectors to their corresponding entrypoint names
-    // Used for transaction simulation, not required for execution
-    const SELECTOR_TO_ENTRYPOINT = {
-      "0x025a9ad6882f2475e2ffb11f893dc90829a3672ad40d5428084330b36e55fbff":
-        "prove_deposit",
-      "0x00afd92eeac2cdc892d6323dd051eaf871b8d21df8933ce111c596038eb3afd3":
-        "register_blocks",
-      "0x02e486c87262b6abbb9f00f150fe22bd3fa5568adb9524d7c4f9f4e38ca17529":
-        "update_canonical_chain",
-    } as const;
-
-    // Prepare invocations for transaction simulation
-    // Converts selectors to entrypoint names for proper simulation
-    const invocations: Invocations = [
-      {
-        type: TransactionType.INVOKE,
-        payload: calls.map(({ contractAddress, selector, calldata }) => ({
-          contractAddress,
-          entrypoint: SELECTOR_TO_ENTRYPOINT[selector],
-          calldata,
-        })),
-      },
-    ];
-
-    // Simulate the transaction and log the results
-    const response = await account.simulateTransaction(invocations);
-    const steps =
-      // @ts-ignore - Accessing nested property that might be undefined
-      response[0].transaction_trace?.execute_invocation?.execution_resources
-        .steps;
-    if (steps) {
-      console.log("Simulation successful in", steps, "steps");
-    } else {
-      console.log("Simulation failed:", response);
-    }
+    // Send a multicall syncing the chain before interacting with our contract
+    await account.execute([...syncTransactions, proveDepositCall]);
   } catch (error) {
     console.error("Error:", error);
   }
