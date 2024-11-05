@@ -1,19 +1,66 @@
-import { BitcoinProxiedRpcProvider, UtuProvider } from "bitcoin-on-starknet";
-import { Account, RpcProvider } from "starknet";
+import {
+  BitcoinProxiedRpcProvider,
+  UtuProvider,
+  serializedHash,
+} from "bitcoin-on-starknet";
+import { Account, RpcProvider, TransactionType, Invocations } from "starknet";
+
+// Example of a serialized Bitcoin transaction data structure
+// This represents a pre-formatted transaction ready for Starknet processing
+const EXAMPLE_SERIALIZED_TRANSACTION = [
+  2n,
+  0n,
+  1n,
+  4n,
+  127546132949210781219533252159022639450970689694324394832203925292873026833n,
+  99892504610292551029880722820554936728813665763763858407732768400713688682n,
+  172923111859001333637712955585689064747483567325099474889041414256563905907n,
+  221929393252830214864465594073262010340874249222247854506920692160908531919n,
+  11426847954597392708735371614518684n,
+  15n,
+  4294967295n,
+  1615376208n,
+  3463025754n,
+  988515002n,
+  88934289n,
+  57631028n,
+  1205197770n,
+  4160278298n,
+  1843336072n,
+  1n,
+  0n,
+  0n,
+  0n,
+  0n,
+  0n,
+  0n,
+  0n,
+  0n,
+  0n,
+  1n,
+  100043947n,
+  0n,
+  744843869111954496999033090920949585736336206836849668294828n,
+  25n,
+  0n,
+  0n,
+] as const;
 
 async function main() {
-  // Initialize the Bitcoin RPC provider with a testing rpc graciously provided by LFG Labs
+  // Initialize providers
+  // Bitcoin RPC provider connects to LFG Labs' testing endpoint for Bitcoin network interaction
   const bitcoinProvider = new BitcoinProxiedRpcProvider(
     "https://btcrpc.lfg.rs/rpc"
   );
   const utuProvider = new UtuProvider(bitcoinProvider);
 
-  // Initialize Starknet provider
+  // Configure Starknet provider for Sepolia testnet
   const starknetProvider = new RpcProvider({
     nodeUrl: "https://sepolia.rpc.starknet.id",
   });
 
-  // Initialize a Starknet Account
+  // Initialize Starknet account using environment variables
+  // Requires STARKNET_ADDRESS and STARKNET_PRIVATE_KEY to be set
   const account = new Account(
     starknetProvider,
     process.env.STARKNET_ADDRESS as string,
@@ -21,7 +68,7 @@ async function main() {
   );
 
   try {
-    // This is our bitcoin deposit transaction
+    // Fetch and verify Bitcoin deposit transaction
     const txId =
       "fa89c32152bf324cd1d47d48187f977c7e0f380f6f78132c187ce27923f62fcc";
     const rawTransaction = await bitcoinProvider.getRawTransaction(txId, true);
@@ -29,14 +76,76 @@ async function main() {
       rawTransaction.blockhash
     );
 
-    // Generate actual transactions
+    // Generate synchronization transactions for Starknet
+    // These ensure the Bitcoin state is properly reflected on Starknet
     const syncTransactions = await utuProvider.getSyncTxs(
       starknetProvider,
       header.height,
       0n
     );
 
+    // Generate Merkle proof for deposit verification
     const txInclusionProof = await utuProvider.getTxInclusionProof(txId);
+
+    // Prepare calldata for prove_deposit function
+    // Includes: transaction data, UTXO ID, block details, and Merkle proof
+    let calldata = EXAMPLE_SERIALIZED_TRANSACTION.map(
+      (n) => "0x" + n.toString(16)
+    );
+    calldata.push("0x0");
+    calldata.push("0x" + header.height.toString(16)); // block_height (u64)
+    calldata.push(...utuProvider.serializeBlockHeader(header));
+
+    // Add tx_inclusion proof
+    calldata.push(txInclusionProof.length);
+    txInclusionProof.forEach(([hash, direction]: [string, boolean]) => {
+      calldata.push(...serializedHash(hash)); // Merkle proof hash
+      calldata.push(direction ? "0x1" : "0x0"); // Direction (bool)
+    });
+    const proveDepositCall = {
+      contractAddress:
+        "0x04d3c95735a74aafd9092705943b0602f100d77f2ce872ffd4962c4924e6d145",
+      selector:
+        "0x025a9ad6882f2475e2ffb11f893dc90829a3672ad40d5428084330b36e55fbff",
+      calldata,
+    };
+    const calls = [...syncTransactions, proveDepositCall];
+
+    // Map function selectors to their corresponding entrypoint names
+    // Used for transaction simulation, not required for execution
+    const SELECTOR_TO_ENTRYPOINT = {
+      "0x025a9ad6882f2475e2ffb11f893dc90829a3672ad40d5428084330b36e55fbff":
+        "prove_deposit",
+      "0x00afd92eeac2cdc892d6323dd051eaf871b8d21df8933ce111c596038eb3afd3":
+        "register_blocks",
+      "0x02e486c87262b6abbb9f00f150fe22bd3fa5568adb9524d7c4f9f4e38ca17529":
+        "update_canonical_chain",
+    } as const;
+
+    // Prepare invocations for transaction simulation
+    // Converts selectors to entrypoint names for proper simulation
+    const invocations: Invocations = [
+      {
+        type: TransactionType.INVOKE,
+        payload: calls.map(({ contractAddress, selector, calldata }) => ({
+          contractAddress,
+          entrypoint: SELECTOR_TO_ENTRYPOINT[selector],
+          calldata,
+        })),
+      },
+    ];
+
+    // Simulate the transaction and log the results
+    const response = await account.simulateTransaction(invocations);
+    const steps =
+      // @ts-ignore - Accessing nested property that might be undefined
+      response[0].transaction_trace?.execute_invocation?.execution_resources
+        .steps;
+    if (steps) {
+      console.log("Simulation successful in", steps, "steps");
+    } else {
+      console.log("Simulation failed:", response);
+    }
   } catch (error) {
     console.error("Error:", error);
   }

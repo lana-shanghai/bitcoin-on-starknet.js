@@ -2,7 +2,7 @@ import { BitcoinProvider } from "./BitcoinProvider";
 import { BlockHeightProof, RegisterBlocksTx } from "@/UtuTypes";
 import { BlockHeader } from "./BitcoinTypes";
 import { BigNumberish, ByteArray } from "starknet";
-import { Contract, RpcProvider } from "starknet";
+import { RpcProvider } from "starknet";
 
 const CONTRACT_ADDRESS =
   "0x064e21f88caa162294fdda7f73d67ad09b81419e97df3409a5eb13ba39b88c31";
@@ -13,7 +13,7 @@ const toLittleEndianHex = (num: number): string => {
 };
 
 // New helper function to serialize hash
-const serializedHash = (hash: string): string[] => {
+export const serializedHash = (hash: string): string[] => {
   return hash
     .match(/.{8}/g)!
     .map((chunk) => "0x" + chunk.match(/.{2}/g)!.reverse().join(""))
@@ -353,7 +353,7 @@ export class UtuProvider {
     };
   }
 
-  private serializeBlockHeader(blockHeader: BlockHeader): string[] {
+  public serializeBlockHeader(blockHeader: BlockHeader): string[] {
     // Ensure all fields are present
     const requiredFields = [
       "version",
